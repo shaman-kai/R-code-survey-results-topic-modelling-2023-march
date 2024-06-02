@@ -1,0 +1,182 @@
+---
+title: "Survey responses Topic modelling"
+author: "Kai Shaman"
+date: "21-03-2023"
+---
+```{r, include=FALSE}
+# LOAD THE PACKAGES
+
+#install.packages(c('readxl','openxlsx','dplyr','tidyverse','quanteda','quanteda.textplots','quanteda.textstats','udpipe','packcircles','ggplot2'))
+library(readxl)
+library(openxlsx)
+library(dplyr)
+library(tidyverse)
+library(quanteda)
+library(quanteda.textplots)
+library(quanteda.textstats)
+library(udpipe)
+library(packcircles)
+library(ggplot2)
+```
+
+```{r, include=FALSE}
+# DOWNLOAD MODEL FOR ENGLISH
+model <- udpipe_download_model(language = "english")
+model <- udpipe_load_model(file = model$file_model)
+```
+
+```{r, include=FALSE}
+# LOAD DICTIONARIES AND FUNCTIONS FOR ASK_A_RUSSIAN
+source("ar_dictionaries.R")
+source("ar_functions.R")
+```
+
+```{r, include=FALSE}
+# READ THE DATA FROM EXCEL FILE INTO A DATAFRAME
+df_raw <- read_excel("ask_a_russian_tr.xlsx")
+df_raw <- df_raw[1]
+colnames(df_raw) <- c('text')
+``` 
+
+```{r, include=FALSE}
+# CREATE DATAFRAMES FOR EACH TOPIC AND SAVE THEM
+df_raw_all <- df_raw
+df_raw_staying_leaving <- topic_df(staying_leaving, df_raw)
+df_raw_moral_state <- topic_df(moral_state, df_raw)
+df_raw_war_mobilisation <- topic_df(war_mobilisation, df_raw)
+df_raw_regime <- topic_df(regime, df_raw)
+df_raw_economy <- topic_df(economy, df_raw)
+df_raw_society <- topic_df(society, df_raw)
+df_raw_future_life <- topic_df(future_life, df_raw)
+df_raw_other_reasons <- topic_df(other_reasons, df_raw)
+df_raw_positive_aspects_of_rf <- topic_df(positive_aspects_of_rf, df_raw)
+
+responses_by_topic <- list("Stay or leave" = df_raw_staying_leaving, "Moral state" = df_raw_moral_state, "War and military" = df_raw_war_mobilisation, "Regime" = df_raw_regime, "Economy" = df_raw_economy, "Society" = df_raw_society, "Future life" = df_raw_future_life, "Other reasons" = df_raw_other_reasons, "Good_memories" = df_raw_positive_aspects_of_rf)
+write.xlsx(responses_by_topic, file = "Responses_by_Topic.xlsx")
+```
+
+```{r, include=FALSE}
+# CREATE DTMs FOR EACH TOPIC
+dtm_staying_leaving <- topic_dtm(dict$staying_leaving, df_raw_staying_leaving)
+dtm_moral_state <- topic_dtm(dict$moral_state, df_raw_moral_state) 
+dtm_war_mobilisation <- topic_dtm(dict$war_mobilisation, df_raw_war_mobilisation)
+dtm_regime <- topic_dtm(dict$regime, df_raw_regime)
+dtm_economy <- topic_dtm(dict$economy, df_raw_economy)
+dtm_society <- topic_dtm(dict$society, df_raw_society) 
+dtm_future_life <- topic_dtm(dict$future_life, df_raw_future_life)
+dtm_other_reasons <- topic_dtm(dict$other_reasons, df_raw_other_reasons)
+dtm_positive_aspects_of_rf <- topic_dtm(dict$positive_aspects_of_rf, df_raw_positive_aspects_of_rf) 
+```
+
+```{r, include=FALSE}
+# SAVE FREQUENCY TABLES
+corp_raw_all <- corpus(df_raw_all, text_field = 'text')
+dtm_all_raw <- corp_raw_all |>
+  tokens(remove_punct=T, remove_symbols=T) |> tokens_tolower() |> tokens_remove(stopwords('en')) |> tokens_remove(stopwords_askar) |> dfm()  
+f_all <- textstat_frequency(dtm_all_raw, n = 100)
+
+f_staying_leaving <- textstat_frequency(dtm_staying_leaving, n = 100)
+f_moral_state <- textstat_frequency(dtm_moral_state, n = 100)
+f_war_mobilisation <- textstat_frequency(dtm_war_mobilisation, n = 100)
+f_regime <- textstat_frequency(dtm_regime, n = 100)
+f_economy <- textstat_frequency(dtm_economy, n = 100)
+f_society <- textstat_frequency(dtm_society, n = 100)
+f_future_life <- textstat_frequency(dtm_future_life, n = 100)
+f_other_reasons <- textstat_frequency(dtm_other_reasons, n = 100)
+f_positive_aspects_of_rf <- textstat_frequency(dtm_positive_aspects_of_rf, n = 100)
+
+frequency_tables <- list("All" = f_all, "Stay or leave" = f_staying_leaving, "Moral state" = f_moral_state, "War and military" = f_war_mobilisation, "Regime" = f_regime, "Economy" = f_economy, "Society" = f_society, "Future life" = f_future_life, "Other reasons" = f_other_reasons, "Good memories" = f_positive_aspects_of_rf)
+write.xlsx(frequency_tables, file = "Frequency_tables.xlsx")
+```
+
+# FIRST, LET'S TAKE A LOOK AT ALL RESPONSES TOGETHER.
+# HERE IS A WORDCLOUD AND FREQUENCY TABLE FOR ALL RESPONSES (WHOLE RESPONSES) WITHOUT DIVIDING BY TOPIC
+```{r, echo=FALSE}
+textplot_wordcloud(dtm_all_raw, min_count = 1, max_words = 100, color = c('blue','purple', 'maroon', 'red3'))
+```
+
+# AND HERE IS THE TOPICAL STRUCTURE OF THE RESPONSES
+```{r, echo=FALSE}
+topic_list <- c("Stay or leave", "Moral state", "War and military", "Regime", "Economy", "Society", "Future life", "Other reasons", "Good memories")
+topic_frequency <- c(nrow(df_raw_staying_leaving),nrow(df_raw_moral_state),nrow(df_raw_war_mobilisation),nrow(df_raw_regime),nrow(df_raw_economy),nrow(df_raw_society),nrow(df_raw_future_life),nrow(df_raw_other_reasons),nrow(df_raw_positive_aspects_of_rf))
+topics_table <- data.frame(cbind(topic_list, topic_frequency))
+topics_table$topic_frequency <- as.integer(topics_table$topic_frequency) 
+```
+
+```{r, echo=FALSE}
+ggplot(topics_table) +
+  geom_col(aes(x = topic_frequency, y = reorder(topic_list, topic_frequency)), fill = "blue", width = 0.6) 
+```
+  
+```{r, echo=FALSE}
+packing <- circleProgressiveLayout(topics_table$topic_frequency, sizetype='area')
+topics_table2 <- cbind(topics_table, packing)
+topics_table.gg <- circleLayoutVertices(packing, npoints=50)
+topics_table.gg$topic_frequency <- rep(topics_table2$topic_frequency, each=51)
+
+ggplot() + 
+  geom_polygon(data = topics_table.gg, aes(x, y, group = id, fill=topic_frequency), colour = "grey", alpha = 0.6) +
+  scale_fill_distiller(palette = "Blues", direction = 1 ) +
+  geom_text(data = topics_table2, aes(x, y, size=topic_frequency, label = topic_list)) +
+  scale_size_continuous(range = c(1,4)) +
+  theme_void() + 
+  theme(legend.position="none") +
+  coord_equal()
+```
+
+# NOW, WE TAKE TAKE A LOOK AT EACH TOPIC SEPARATELY
+
+# 1) STAYING
+# In terms of motives, those who stay in Russia, either reported some obstacles to leaving the country (financial difficulties, need to take care of elderly relatives), reported that they are planning to leave without further explanation, said that they do not want to leave, or provided no information about possible immigration at all.
+```{r, echo=FALSE}
+textplot_wordcloud(dtm_staying_leaving, min_count = 1, max_words = 100, color = c('blue','purple', 'maroon', 'red3'))
+```
+
+# 2) LEAVING
+# This section shows the overall picture of the responses of those who mention leaving.
+```{r, echo=FALSE}
+textplot_wordcloud(dtm_moral_state, min_count = 2, max_words = 100, color = c('blue','purple', 'maroon', 'red3'))
+```
+
+# Those who left Russia, mention doing it at one of 3 points: 1) before the war with Ukraine, 2) shortly after the beginning of war, after the beginning of mobilisation (and some are currently in the process of leaving). The following 3 sections show responses that have keywords relevant for each of the 3 groups respectively. As you can imagine, they also talk about different reasons for leaving.
+
+# 3) 'BEFORE THE WAR'
+```{r, echo=FALSE}
+textplot_wordcloud(dtm_war_mobilisation, min_count = 1, max_words = 100, color = c('blue','purple', 'maroon', 'red3'))
+```
+
+# 4) 'AFTER THE START OF WAR'
+```{r, echo=FALSE}
+textplot_wordcloud(dtm_regime, min_count = 1, max_words = 100, color = c('blue','purple', 'maroon', 'red3'))
+```
+
+# 5) 'FOLLOWING THE START OF MOBILISATION'
+```{r, echo=FALSE}
+textplot_wordcloud(dtm_economy, min_count = 1, max_words = 100, color = c('blue','purple', 'maroon', 'red3'))
+```
+
+# Next sections reflect the topics that are related to negative experiences living in Russia (the negative experiences were in overwhelming majority) that can also qualify as reasons for leaving. Since we did not ask these two questions separately, it is often difficult to say where a description of experience ends and a reason for leaving begins, so we combined them into the same topics.
+
+# 6) 'GENERALLY AGINST THE REGIME'
+# This topic reflects a group of keywords (and responses that contain them) that show general disagreemnt with the current political system in Russia.
+```{r, echo=FALSE}
+textplot_wordcloud(dtm_society, min_count = 1, max_words = 100, color = c('blue','purple', 'maroon', 'red3'))
+```
+
+# 7) 'SAFETY RISK'
+# Here we selected all the responses that have to do with safety, security, protection from dange and risk. Here our respondents mention that they either left Russia because it was not safe for them or their families, or that they are still in Russia and do not feel safe there.
+```{r, echo=FALSE}
+textplot_wordcloud(dtm_future_life, min_count = 1, max_words = 100, color = c('blue','purple', 'maroon', 'red3'))
+```
+
+# 8) 'NO HOPE OF CHANGE'
+# Here some participants say that they left because they feel that fighting for change inside of Russia is currently a lost cause.
+```{r, echo=FALSE}
+textplot_wordcloud(dtm_other_reasons, min_count = 1, max_words = 100, color = c('blue','purple', 'maroon', 'red3'))
+```
+
+# 9) 'NO FUTURE'
+# Responses in this group reflect their athors see no future for themselves and for their children in Russia, and sometimes that they belive that today's Russia also has no future which prompted the idea of relocation.
+```{r, echo=FALSE}
+textplot_wordcloud(dtm_positive_aspects_of_rf, min_count = 1, max_words = 100, color = c('blue','purple', 'maroon', 'red3'))
+```
